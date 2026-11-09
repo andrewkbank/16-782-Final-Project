@@ -1,53 +1,170 @@
-# Battlecode 2026 Scaffold - Java
+# Battlecode 2026 Path Planning
 
-This is the Battlecode 2026 Java scaffold, containing an `examplefuncsplayer`. Read https://play.battlecode.org/bc26/quick_start !
+This project evaluates low-bytecode path planners for MIT Battlecode 2026. It
+contains two minimal bots with identical high-level behavior, reproducible test
+maps, and a replay analyzer that compares observed routes with optimal static-map
+paths.
 
+Each bot uses one stationary rat king and one baby rat:
 
-### Project Structure
+- The king stays on its cheese mine, collects nearby cheese, and builds exactly
+  one baby rat.
+- The baby chooses deterministic random destinations and delegates movement to
+  the selected path planner.
+- Movement explicitly turns first and calls `moveForward()` only after checking
+  legality.
 
-- `README.md`
-    This file.
-- `build.gradle`
-    The Gradle build file used to build and run players.
-- `src/`
-    Player source code.
-- `test/`
-    Player test code.
-- `client/`
-    Contains the client. The proper executable can be found in this folder (don't move this!)
-- `build/`
-    Contains compiled player code and other artifacts of the build process. Can be safely ignored.
-- `matches/`
-    The output folder for match files.
-- `maps/`
-    The default folder for custom maps.
-- `gradlew`, `gradlew.bat`
-    The Unix (OS X/Linux) and Windows versions, respectively, of the Gradle wrapper. These are nifty scripts that you can execute in a terminal to run the Gradle build tasks of this project. If you aren't planning to do command line development, these can be safely ignored.
-- `gradle/`
-    Contains files used by the Gradle wrapper scripts. Can be safely ignored.
+The project currently uses Battlecode engine `1.2.6`, client `1.0.7`, and Java
+21.
 
-### How to get started
+## Path planners
 
-You are free to directly edit `examplefuncsplayer`.
-However, we recommend you make a new bot by copying `examplefuncsplayer` to a new package under the `src` folder.
+### IvanGeffner-derived BugNav (`pathplanner`)
 
-### Useful Commands
+`src/pathplanner/BugNav.java` adapts the obstacle tracking, wall-following side
+selection, target reset, and loop-state logic from Ivan Geffner's
+[BC26 BugNav implementation](https://github.com/IvanGeffner/BC26/blob/70b3f40cebefcca9dc858771715d78088e7ae520/basic51/BugNav.java).
 
-- `./gradlew build`
-    Compiles your player
-- `./gradlew run`
-    Runs a game with the settings in gradle.properties
-- `./gradlew update`
-    Update configurations for the latest version -- run this often
-- `./gradlew zipForSubmit`
-    Create a submittable zip file
-- `./gradlew tasks`
-    See what else you can do!
+This planner is fast and usually takes direct routes, but its map-edge side
+switching has a static single-agent counterexample documented below.
 
+### Classical Bug2 (`classicbug2`)
 
-### Configuration 
+`src/classicbug2/ClassicBug2.java` is a grid adaptation of classical Bug2. Bug2
+was selected instead of Bug1 because it needs less state and does not require a
+complete boundary traversal followed by a second traversal to the best leave
+point.
 
-Look at `gradle.properties` for project-wide configuration.
+The implementation maintains:
 
-If you are having any problems with the default client, please report to teh devs and
-feel free to set the `compatibilityClient` configuration to `true` to download a different version of the client.
+- the start-to-goal m-line;
+- an obstacle hit point and hit-point distance;
+- a fixed boundary-following handedness for each encounter;
+- explicit contact with the most recently observed blocked tile; and
+- a leave condition requiring a closer m-line crossing.
+
+Map edges are treated as ordinary obstacle boundaries. An unreachable target is
+reported only after returning to the hit point following a complete boundary
+traversal. Classical completeness assumptions still require static obstacles;
+another moving robot can invalidate them.
+
+## Test maps
+
+| Map | Purpose |
+| --- | --- |
+| `BugNavTest` | Standard symmetric wall barriers with gaps. |
+| `BugNavAdversarial` | A 32×32 maze with 182 walls (17.8%), long one-tile corridors, and capped dead ends. |
+| `BugNavSingleAgentTrap` | Minimal static boundary counterexample: a reachable three-step target separated by two relevant wall tiles. |
+
+All maps contain cheese mines beneath the stationary kings and no cats or dirt.
+The counterexample map contains rotationally mirrored tests for the two required
+teams; the babies remain far apart and do not interact.
+
+Map sources are under `test/maptools/`, and generated `.map26` files are under
+`maps/`.
+
+## Replay-based performance analysis
+
+`test/pathanalysis/PathPerformanceAnalyzer.java` reads the engine's gzip-wrapped
+FlatBuffer replay. Per-round path collection therefore consumes no bot
+bytecodes. A baby emits only one `PATH_TARGET` indicator when its target changes.
+
+The analyzer writes generated CSVs under `analysis/`:
+
+- `path-trace.csv`: round, location, facing, cooldowns, engine-measured
+  bytecodes, active target, and segment ID.
+- `path-summary.csv`: actual and optimal steps/rounds, detour, path efficiency,
+  completion status, total bytecodes, mean/peak bytecodes per turn, and
+  bytecodes per movement step.
+
+The optimal baseline is an eight-neighbor BFS over static passability. Walls,
+dirt, and initial robot footprints are blocked; dynamic robot collisions are
+included in actual performance but intentionally excluded from the optimum.
+
+## Current results
+
+These are 2,000-round engine runs. Random target streams diverge after planners
+finish or reject targets at different times, so the results are aggregate rather
+than perfectly paired.
+
+### Standard map
+
+| Planner | Reached / segments | Mean path efficiency | Bytecodes / turn | Bytecodes / step |
+| --- | ---: | ---: | ---: | ---: |
+| Ivan-derived BugNav | 246 / 280 | 0.915 | 342.7 | 368.0 |
+| Classical Bug2 | 173 / 207 | 0.852 | 313.3 | 331.1 |
+
+### One-wide-corridor adversarial map
+
+| Planner | Reached / segments | Mean path efficiency | Bytecodes / turn | Bytecodes / step |
+| --- | ---: | ---: | ---: | ---: |
+| Ivan-derived BugNav | 75 / 97 | 0.807 | 597.0 | 615.0 |
+| Classical Bug2 | 48 / 73 | 0.640 | 395.9 | 403.7 |
+
+Bug2 is more conservative and produces longer routes, but it uses fewer
+bytecodes—especially while following complex boundaries.
+
+### Static single-agent counterexample
+
+For team A, the baby starts at `(0,5)`, targets `(0,2)`, and has walls at
+`(0,3)` and `(0,4)`. The optimal route is:
+
+```text
+(0,5) -> (1,4) -> (1,3) -> (0,2)
+```
+
+| Planner | Result | Steps | Rounds | Mean bytecodes / observed turn |
+| --- | --- | ---: | ---: | ---: |
+| Ivan-derived BugNav | Stalls at `(1,4)` | 1 | 1,998 without arrival | 1,129.4 |
+| Classical Bug2 | Reaches target | 3 | 3 | 313.4 |
+
+The Ivan-derived module repeatedly flips its wall-following side when candidate
+directions extend beyond the map boundary. Classical Bug2 preserves its
+boundary-following orientation and completes the optimal route.
+
+## Commands
+
+On Windows, replace `./gradlew` with `.\gradlew.bat`.
+
+```text
+# Install/update dependencies and compile
+./gradlew update build
+
+# Run the default Ivan-derived bot on BugNavTest
+./gradlew run
+
+# Regenerate all custom maps
+./gradlew generatePathfindingTestMap
+./gradlew generateAdversarialPathfindingMap
+./gradlew generateSingleAgentBugNavTrapMap
+
+# Run and analyze Ivan-derived BugNav
+./gradlew benchmarkPaths -PteamA=pathplanner -PteamB=pathplanner -Pmaps=BugNavAdversarial -PanalysisOutput=analysis/ivan/adversarial
+
+# Run and analyze classical Bug2
+./gradlew benchmarkPaths -PteamA=classicbug2 -PteamB=classicbug2 -Pmaps=BugNavAdversarial -PanalysisOutput=analysis/classic-bug2/adversarial
+
+# Reproduce the fixed-target comparison
+./gradlew benchmarkPaths -PteamA=bugnavcounterexample -PteamB=bugnavcounterexample -Pmaps=BugNavSingleAgentTrap -PanalysisOutput=analysis/single-agent-trap
+./gradlew benchmarkPaths -PteamA=classicbug2counterexample -PteamB=classicbug2counterexample -Pmaps=BugNavSingleAgentTrap -PanalysisOutput=analysis/classic-bug2/single-agent-trap
+```
+
+To analyze an existing replay without rerunning a match, use `analyzePaths` with
+`-PanalysisReplay=<file>`, `-PanalysisMap=<name>`, and optionally
+`-PanalysisOutput=<directory>`.
+
+## Repository layout
+
+```text
+src/pathplanner/                 Ivan-derived BugNav bot
+src/classicbug2/                 Classical Bug2 bot
+src/*counterexample/             Fixed-target comparison harnesses
+maps/                            Generated Battlecode maps
+test/maptools/                   Reproducible map generators
+test/pathanalysis/               Replay and optimal-path analyzer
+tools/search_bugnav_counterexample.mjs
+                                 Static counterexample search harness
+```
+
+Generated clients, replays, builds, dependency caches, JVM socket scratch data,
+and analysis CSVs are intentionally excluded by `.gitignore`.

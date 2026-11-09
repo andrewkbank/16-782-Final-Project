@@ -412,6 +412,66 @@ task listMaps {
   }
 }
 
+task generatePathfindingTestMap(type: JavaExec) {
+  description 'Generates the BugNav pathfinding test map.'
+  group 'battlecode'
+  dependsOn testClasses
+
+  mainClass = 'maptools.GeneratePathfindingTestMap'
+  classpath = sourceSets.test.runtimeClasspath
+  args = [new File(projectDir, 'maps').absolutePath]
+}
+
+task generateAdversarialPathfindingMap(type: JavaExec) {
+  description 'Generates the one-wide-corridor BugNav adversarial map.'
+  group 'battlecode'
+  dependsOn testClasses
+
+  mainClass = 'maptools.GenerateAdversarialPathfindingMap'
+  classpath = sourceSets.test.runtimeClasspath
+  args = [new File(projectDir, 'maps').absolutePath]
+}
+
+task generateSingleAgentBugNavTrapMap(type: JavaExec) {
+  description 'Generates the minimal static single-agent BugNav counterexample.'
+  group 'battlecode'
+  dependsOn testClasses
+
+  mainClass = 'maptools.GenerateSingleAgentBugNavTrapMap'
+  classpath = sourceSets.test.runtimeClasspath
+  args = [new File(projectDir, 'maps').absolutePath]
+}
+
+def analysisMapName = project.findProperty('analysisMap') ?:
+    project.property('maps').toString().split(',')[0]
+def analysisReplayFile = project.findProperty('analysisReplay') ?:
+    new File(projectDir, 'matches/' + defaultReplayName + '.bc26').absolutePath
+def analysisOutputDir = project.findProperty('analysisOutput') ?:
+    new File(projectDir, 'analysis').absolutePath
+
+task analyzePaths(type: JavaExec) {
+  description 'Extracts baby-rat paths from a replay and compares them with optimal paths.'
+  group 'battlecode'
+  dependsOn testClasses
+
+  mainClass = 'pathanalysis.PathPerformanceAnalyzer'
+  classpath = sourceSets.test.runtimeClasspath
+  args = [
+    analysisReplayFile,
+    new File(projectDir, 'maps').absolutePath,
+    analysisMapName,
+    analysisOutputDir,
+  ]
+}
+
+task benchmarkPaths {
+  description 'Runs the configured match and analyzes path-planning performance.'
+  group 'battlecode'
+  dependsOn run, analyzePaths
+}
+
+analyzePaths.mustRunAfter run
+
 
 //////// Submitting ////////
 

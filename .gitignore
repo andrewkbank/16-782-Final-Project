@@ -4,6 +4,13 @@
 
 **/matches
 **/client
+*.bc26
+
+###### PYTHON ######
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
 
 ###### JAVA ######
 
@@ -178,6 +185,9 @@ fabric.properties
 ###### GRADLE ######
 
 .gradle
+.gradle-cache/
+.jvm-sockets/
+analysis/
 **/build/
 !src/**/build/
 
