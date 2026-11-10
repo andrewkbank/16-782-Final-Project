@@ -442,6 +442,16 @@ task generateSingleAgentBugNavTrapMap(type: JavaExec) {
   args = [new File(projectDir, 'maps').absolutePath]
 }
 
+task generatePathfindingMapSuite(type: JavaExec) {
+  description 'Generates 40 unique, connected path-planning benchmark maps.'
+  group 'battlecode'
+  dependsOn testClasses
+
+  mainClass = 'maptools.GeneratePathfindingMapSuite'
+  classpath = sourceSets.test.runtimeClasspath
+  args = [new File(projectDir, 'maps').absolutePath]
+}
+
 def analysisMapName = project.findProperty('analysisMap') ?:
     project.property('maps').toString().split(',')[0]
 def analysisReplayFile = project.findProperty('analysisReplay') ?:

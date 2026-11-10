@@ -1,7 +1,7 @@
 # Battlecode 2026 Path Planning
 
 This project evaluates low-bytecode path planners for MIT Battlecode 2026. It
-contains two minimal bots with identical high-level behavior, reproducible test
+contains three minimal bots with identical high-level behavior, reproducible test
 maps, and a replay analyzer that compares observed routes with optimal static-map
 paths.
 
@@ -48,6 +48,31 @@ reported only after returning to the hit point following a complete boundary
 traversal. Classical completeness assumptions still require static obstacles;
 another moving robot can invalidate them.
 
+### Real-Time Adaptive A* (`rtaa`)
+
+`src/rtaa/RealTimeAdaptiveAStar.java` implements bounded Real-Time Adaptive A*
+(RTAA*) over the eight-neighbor grid. Each movement turn it:
+
+- records newly sensed passable and blocked terrain;
+- runs a limited A* lookahead from the rat's current location;
+- selects the lowest-`f` frontier state and takes the first step toward it; and
+- updates every expanded state's heuristic to `f* - g(s)`.
+
+The adaptive heuristic persists while pursuing the same target. Unknown tiles
+are optimistically treated as passable, while sensed static walls remain in a
+compact byte-array map. Search state uses preallocated primitive arrays and a
+binary heap; cached `h` and `f` values avoid expensive coordinate arithmetic in
+heap comparisons.
+
+The lookahead is capped at five node expansions per turn and also stops if fewer
+than 4,000 bytecodes remain. Five was selected after engine testing against the
+17,500-bytecode baby-rat limit. The final compact implementation peaked at
+14,838 bytecodes on `BugNavTest` and 14,532 on `BugNavAdversarial`, including
+construction and target-assignment turns; no observed turn reached the limit.
+RTAA* checks movement legality immediately before turning and moving, and falls
+back to the best legal adjacent tile when the planned step is temporarily
+occupied.
+
 ## Test maps
 
 | Map | Purpose |
@@ -60,6 +85,25 @@ All maps contain cheese mines beneath the stationary kings and no cats or dirt.
 The counterexample map contains rotationally mirrored tests for the two required
 teams; the babies remain far apart and do not interact.
 
+### Forty-map benchmark suite
+
+`GeneratePathfindingMapSuite` reproducibly creates `PathSuite01` through
+`PathSuite40`, covering five wall families with eight variants each:
+
+- staggered barriers with offset gates;
+- interconnected rooms with varied door placement;
+- nested rings with paired entrances;
+- comb obstacles with long dead ends; and
+- nested spiral/U-shaped obstacles.
+
+The suite varies map dimensions from 24 to 38 tiles and wall density from about
+5% to 16%. Every layout is rotationally symmetric and unique. The generator
+also clears generous king/spawn zones, places a cheese mine beneath each king,
+uses a deterministic cheese seed verified to sustain the stationary kings for
+the full 2,000 rounds, uses no cats or dirt, connects every passable tile to the
+kings, and calls the engine's map validator before writing the map. Map names
+are listed in `maps/path-suite-maps.txt`.
+
 Map sources are under `test/maptools/`, and generated `.map26` files are under
 `maps/`.
 
@@ -68,6 +112,8 @@ Map sources are under `test/maptools/`, and generated `.map26` files are under
 `test/pathanalysis/PathPerformanceAnalyzer.java` reads the engine's gzip-wrapped
 FlatBuffer replay. Per-round path collection therefore consumes no bot
 bytecodes. A baby emits only one `PATH_TARGET` indicator when its target changes.
+The RTAA* baby additionally redraws a magenta indicator dot on its current goal
+each round so the destination remains visible during replay playback.
 
 The analyzer writes generated CSVs under `analysis/`:
 
@@ -87,12 +133,59 @@ These are 2,000-round engine runs. Random target streams diverge after planners
 finish or reject targets at different times, so the results are aggregate rather
 than perfectly paired.
 
+### Forty-map suite
+
+The full suite comprises 120 matches: each of the three planners ran for 2,000
+rounds on all 40 maps. A target assignment is *reachable* when the analyzer's
+static eight-neighbor BFS finds a path. Random targets that land on walls are
+excluded. `Reached / reachable` is the raw completion count; `adjusted` also
+excludes reachable targets assigned too near round 2,000 to finish.
+
+| Planner | Reached / reachable | Raw completion | Match-ended | Retargeted | Adjusted completion |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Ivan-derived BugNav | 5,481 / 5,576 | 98.30% | 69 | 26 | 99.53% |
+| Classical Bug2 | 3,582 / 3,878 | 92.37% | 74 | 222 | 94.16% |
+| RTAA* (5 expansions) | 3,755 / 3,843 | 97.71% | 72 | 16 | 99.58% |
+
+`Retargeted` means the bot changed away from a statically reachable target
+before arriving. Dynamic occupancy can cause this for every bot; Bug2 may also
+retarget after its boundary traversal declares the target unreachable. The
+replay does not distinguish those causes, so this column should not be read as
+a pure single-agent incompleteness count.
+
+Path-quality metrics below include only completed reachable assignments.
+Aggregate stretch is total actual steps divided by total optimal steps; lower is
+better, and `1.000×` is optimal. Mean efficiency is the per-assignment mean of
+`optimal / actual`, so higher is better.
+
+| Planner | Actual / optimal steps | Aggregate stretch | Mean efficiency | Exactly optimal | Bytecodes / turn | Peak bytecodes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Ivan-derived BugNav | 134,049 / 93,196 | 1.438× | 0.856 | 51.7% | 498.5 | 16,119 |
+| Classical Bug2 | 113,180 / 59,009 | 1.918× | 0.742 | 35.1% | 352.7 | 671 |
+| RTAA* (5 expansions) | 110,818 / 61,901 | 1.790× | 0.869 | 55.7% | 9,090.6 | 14,854 |
+
+Bytecodes per turn are aggregated over completed reachable assignments. Peak
+bytecodes include all 159,920 observed baby-rat turns per planner; none of the
+three planners reached the 17,500-bytecode limit anywhere in the suite.
+
+BugNav has the best aggregate path length and near-perfect adjusted completion.
+RTAA* reaches the highest fraction of exact-optimal paths and has the best mean
+efficiency, but a small number of very long comb/spiral routes raise its
+aggregate stretch above BugNav. Bug2 uses the fewest bytecodes but has both the
+lowest completion rate and longest routes.
+
+Rooms and rings are the easiest structures: BugNav uses `1.09×` and `1.18×`
+optimal steps, while RTAA* uses `1.07×` and `1.35×`. Combs and spirals are the
+hardest. Their aggregate stretches are `2.12×`/`1.69×` for BugNav,
+`2.88×`/`2.51×` for Bug2, and `2.89×`/`3.63×` for RTAA*, respectively.
+
 ### Standard map
 
 | Planner | Reached / segments | Mean path efficiency | Bytecodes / turn | Bytecodes / step |
 | --- | ---: | ---: | ---: | ---: |
 | Ivan-derived BugNav | 246 / 280 | 0.915 | 342.7 | 368.0 |
 | Classical Bug2 | 173 / 207 | 0.852 | 313.3 | 331.1 |
+| RTAA* (5 expansions) | 192 / 221 | 0.959 | 8,515.8 | 9,192.5 |
 
 ### One-wide-corridor adversarial map
 
@@ -100,9 +193,14 @@ than perfectly paired.
 | --- | ---: | ---: | ---: | ---: |
 | Ivan-derived BugNav | 75 / 97 | 0.807 | 597.0 | 615.0 |
 | Classical Bug2 | 48 / 73 | 0.640 | 395.9 | 403.7 |
+| RTAA* (5 expansions) | 70 / 91 | 0.751 | 8,233.3 | 8,433.4 |
 
 Bug2 is more conservative and produces longer routes, but it uses fewer
-bytecodes—especially while following complex boundaries.
+bytecodes—especially while following complex boundaries. RTAA* produces the
+most efficient routes on the standard map and remains competitive in the
+one-wide maze, at the expected cost of substantially more planning bytecodes.
+Its measured peak was 14,838 bytecodes on the standard map and 14,532 on the
+adversarial map.
 
 ### Static single-agent counterexample
 
@@ -137,6 +235,7 @@ On Windows, replace `./gradlew` with `.\gradlew.bat`.
 ./gradlew generatePathfindingTestMap
 ./gradlew generateAdversarialPathfindingMap
 ./gradlew generateSingleAgentBugNavTrapMap
+./gradlew generatePathfindingMapSuite
 
 # Run and analyze Ivan-derived BugNav
 ./gradlew benchmarkPaths -PteamA=pathplanner -PteamB=pathplanner -Pmaps=BugNavAdversarial -PanalysisOutput=analysis/ivan/adversarial
@@ -144,9 +243,18 @@ On Windows, replace `./gradlew` with `.\gradlew.bat`.
 # Run and analyze classical Bug2
 ./gradlew benchmarkPaths -PteamA=classicbug2 -PteamB=classicbug2 -Pmaps=BugNavAdversarial -PanalysisOutput=analysis/classic-bug2/adversarial
 
+# Run and analyze Real-Time Adaptive A*
+./gradlew benchmarkPaths -PteamA=rtaa -PteamB=rtaa -Pmaps=BugNavAdversarial -PanalysisOutput=analysis/rtaa/adversarial
+
 # Reproduce the fixed-target comparison
 ./gradlew benchmarkPaths -PteamA=bugnavcounterexample -PteamB=bugnavcounterexample -Pmaps=BugNavSingleAgentTrap -PanalysisOutput=analysis/single-agent-trap
 ./gradlew benchmarkPaths -PteamA=classicbug2counterexample -PteamB=classicbug2counterexample -Pmaps=BugNavSingleAgentTrap -PanalysisOutput=analysis/classic-bug2/single-agent-trap
+
+# Run all three planners on all 40 suite maps (120 analyzed matches)
+.\tools\benchmark_path_suite.ps1
+
+# Run a smaller slice, useful for a smoke test
+.\tools\benchmark_path_suite.ps1 -Start 1 -Limit 2
 ```
 
 To analyze an existing replay without rerunning a match, use `analyzePaths` with
@@ -158,10 +266,12 @@ To analyze an existing replay without rerunning a match, use `analyzePaths` with
 ```text
 src/pathplanner/                 Ivan-derived BugNav bot
 src/classicbug2/                 Classical Bug2 bot
+src/rtaa/                        Real-Time Adaptive A* bot
 src/*counterexample/             Fixed-target comparison harnesses
 maps/                            Generated Battlecode maps
 test/maptools/                   Reproducible map generators
 test/pathanalysis/               Replay and optimal-path analyzer
+tools/benchmark_path_suite.ps1   Three-planner suite runner
 tools/search_bugnav_counterexample.mjs
                                  Static counterexample search harness
 ```
