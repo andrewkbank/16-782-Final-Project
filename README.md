@@ -61,14 +61,16 @@ another moving robot can invalidate them.
 The adaptive heuristic persists while pursuing the same target. Unknown tiles
 are optimistically treated as passable, while sensed static walls remain in a
 compact byte-array map. Search state uses preallocated primitive arrays and a
-binary heap; cached `h` and `f` values avoid expensive coordinate arithmetic in
-heap comparisons.
+binary heap. Its hot path uses unrolled eight-neighbor expansion,
+generation-stamped map arrays, and one packed `f`/`h`/state heap key. Direction
+conversion uses the engine's one-cost `Direction.fromDelta`, and movement
+avoids redundant legality checks.
 
-The lookahead is capped at five node expansions per turn and also stops if fewer
-than 4,000 bytecodes remain. Five was selected after engine testing against the
-17,500-bytecode baby-rat limit. The final compact implementation peaked at
-14,838 bytecodes on `BugNavTest` and 14,532 on `BugNavAdversarial`, including
-construction and target-assignment turns; no observed turn reached the limit.
+The lookahead is capped at 14 node expansions per turn and also stops if fewer
+than 4,000 bytecodes remain. Fourteen was selected by the deterministic
+comb/spiral sweep below: it had the highest completion count, best aggregate
+stretch, and lower bytecode usage than the saturated 16-expansion run. The
+largest measured turn in that sweep used 16,893 of the 17,500-bytecode limit.
 RTAA* checks movement legality immediately before turning and moving, and falls
 back to the best legal adjacent tile when the planned step is temporarily
 occupied.
@@ -133,7 +135,38 @@ These are 2,000-round engine runs. Random target streams diverge after planners
 finish or reject targets at different times, so the results are aggregate rather
 than perfectly paired.
 
+### Deterministic RTAA* expansion sweep
+
+The `rtaabench` package assigns a new pseudo-random target on fixed 200-round
+boundaries. Each target is a pure function of map dimensions, baby spawn, and
+episode number, so planner progress cannot alter later assignments. Across all
+nine expansion settings, all 2,560 cross-setting target comparisons matched.
+
+The sweep covers the eight comb and eight spiral maps: 320 fixed target episodes
+per setting, of which 283 are statically reachable. Stretch is total actual
+steps divided by total optimal steps over completed reachable episodes.
+
+| Expansions | Reached / reachable | Completion | Aggregate stretch | Bytecodes / turn | Peak bytecodes |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 5 | 237 / 283 | 83.7% | 2.170× | 6,948.6 | 11,621 |
+| 6 | 241 / 283 | 85.2% | 2.100× | 8,049.3 | 13,621 |
+| 7 | 244 / 283 | 86.2% | 2.000× | 9,085.6 | 15,657 |
+| 8 | 245 / 283 | 86.6% | 2.080× | 10,101.3 | 16,891 |
+| 9 | 254 / 283 | 89.8% | 1.990× | 10,870.7 | 16,893 |
+| 10 | 256 / 283 | 90.5% | 1.960× | 11,674.0 | 16,893 |
+| 12 | 253 / 283 | 89.4% | 1.880× | 12,647.2 | 16,893 |
+| **14** | **262 / 283** | **92.6%** | **1.800×** | **12,970.3** | **16,893** |
+| 16 | 262 / 283 | 92.6% | 1.840× | 13,059.4 | 16,979 |
+
+At the same cap of five on `PathSuite04_Combs`, bytecode optimization preserved
+the exact 10 completed routes (454 actual versus 176 optimal steps) while
+reducing mean usage from 9,114.7 to 7,092.5 bytecodes per turn (22.2%) and the
+peak from 14,516 to 11,468 (21.0%).
+
 ### Forty-map suite
+
+This earlier cross-planner suite used the pre-optimization five-expansion RTAA*
+configuration; it is retained as the like-for-like three-planner baseline.
 
 The full suite comprises 120 matches: each of the three planners ran for 2,000
 rounds on all 40 maps. A target assignment is *reachable* when the analyzer's
@@ -255,6 +288,9 @@ On Windows, replace `./gradlew` with `.\gradlew.bat`.
 
 # Run a smaller slice, useful for a smoke test
 .\tools\benchmark_path_suite.ps1 -Start 1 -Limit 2
+
+# Sweep deterministic RTAA* targets on every comb and spiral map
+.\tools\benchmark_rtaa_expansions.ps1
 ```
 
 To analyze an existing replay without rerunning a match, use `analyzePaths` with
@@ -267,11 +303,14 @@ To analyze an existing replay without rerunning a match, use `analyzePaths` with
 src/pathplanner/                 Ivan-derived BugNav bot
 src/classicbug2/                 Classical Bug2 bot
 src/rtaa/                        Real-Time Adaptive A* bot
+src/rtaabench/                   Fixed-schedule RTAA* benchmark bot
 src/*counterexample/             Fixed-target comparison harnesses
 maps/                            Generated Battlecode maps
 test/maptools/                   Reproducible map generators
 test/pathanalysis/               Replay and optimal-path analyzer
 tools/benchmark_path_suite.ps1   Three-planner suite runner
+tools/benchmark_rtaa_expansions.ps1
+                                 Deterministic RTAA* expansion sweep
 tools/search_bugnav_counterexample.mjs
                                  Static counterexample search harness
 ```

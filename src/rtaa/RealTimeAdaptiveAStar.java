@@ -19,12 +19,15 @@ import java.util.Arrays;
  */
 public final class RealTimeAdaptiveAStar {
     /** Tuned below the 17,500-bytecode baby-rat limit on the project maps. */
-    public static final int MAX_EXPANSIONS = 5;
+    public static final int MAX_EXPANSIONS = 14;
     private static final int BYTECODE_RESERVE = 4_000;
     private static final int MAX_SEARCH_NODES = 1 + MAX_EXPANSIONS * 8;
     private static final int HEURISTIC_BITS = 12;
     private static final int HEURISTIC_MASK = (1 << HEURISTIC_BITS) - 1;
-    private static final int NODE_BITS = 6;
+    // Wide enough for expansion sweeps above the production cap. Keeping this
+    // independent of MAX_EXPANSIONS prevents node IDs from spilling into the
+    // generation prefix when a benchmark compiles a larger lookahead.
+    private static final int NODE_BITS = 10;
     private static final int NODE_MASK = (1 << NODE_BITS) - 1;
     private static final int INF = 1_000_000;
 
@@ -57,8 +60,9 @@ public final class RealTimeAdaptiveAStar {
     // Lookahead scratch is bounded by the expansions plus their neighbors.
     private final int[] state = new int[MAX_SEARCH_NODES];
     private final int[] g = new int[MAX_SEARCH_NODES];
-    private final int[] h = new int[MAX_SEARCH_NODES];
-    private final int[] f = new int[MAX_SEARCH_NODES];
+    // Heap comparisons are extremely hot. Pack f, h, and state into one key so
+    // each comparison is two array reads plus one long comparison.
+    private final long[] priority = new long[MAX_SEARCH_NODES];
     private final int[] parent = new int[MAX_SEARCH_NODES];
     private final byte[] status = new byte[MAX_SEARCH_NODES];
     private final int[] heap = new int[MAX_SEARCH_NODES];
@@ -68,7 +72,9 @@ public final class RealTimeAdaptiveAStar {
     private MapLocation target;
     private int targetIndex;
     private int targetGeneration = 1;
+    private int targetPrefix = 1 << HEURISTIC_BITS;
     private int searchGeneration = 1;
+    private int searchPrefix = 1 << NODE_BITS;
     private int nodeCount;
     private int heapSize;
     private int expandedCount;
@@ -91,6 +97,7 @@ public final class RealTimeAdaptiveAStar {
             Arrays.fill(adaptiveHeuristic, 0);
             targetGeneration = 1;
         }
+        targetPrefix = targetGeneration << HEURISTIC_BITS;
     }
 
     public void moveTo(MapLocation newTarget) throws GameActionException {
@@ -124,7 +131,9 @@ public final class RealTimeAdaptiveAStar {
     }
 
     private void observeTerrain() {
-        for (MapInfo info : rc.senseNearbyMapInfos()) {
+        MapInfo[] nearby = rc.senseNearbyMapInfos();
+        for (int i = nearby.length; --i >= 0;) {
+            MapInfo info = nearby[i];
             MapLocation location = info.getMapLocation();
             terrain[index(location.x, location.y)] = info.isPassable() ? (byte) 1 : BLOCKED;
         }
@@ -152,25 +161,30 @@ public final class RealTimeAdaptiveAStar {
             int x = currentState % width;
             int y = currentState / width;
             int nextCost = g[currentNode] + 1;
-            for (int direction = 0; direction < 8; direction++) {
-                int nx = x + DX[direction];
-                int ny = y + DY[direction];
-                if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-                    continue;
+            boolean east = x + 1 < width;
+            boolean west = x > 0;
+            if (y + 1 < height) {
+                visitNeighbor(currentState + width, nextCost, currentNode);
+                if (east) {
+                    visitNeighbor(currentState + width + 1, nextCost, currentNode);
                 }
-                int neighborState = index(nx, ny);
-                if (terrain[neighborState] == BLOCKED) {
-                    continue;
+            }
+            if (east) {
+                visitNeighbor(currentState + 1, nextCost, currentNode);
+                if (y > 0) {
+                    visitNeighbor(currentState - width + 1, nextCost, currentNode);
                 }
-                int neighborNode = findNode(neighborState);
-                if (neighborNode < 0) {
-                    neighborNode = discover(neighborState, nextCost, currentNode);
-                    push(neighborNode);
-                } else if (status[neighborNode] == OPEN && nextCost < g[neighborNode]) {
-                    g[neighborNode] = nextCost;
-                    f[neighborNode] = nextCost + h[neighborNode];
-                    parent[neighborNode] = currentNode;
-                    siftUp(heapPosition[neighborNode]);
+            }
+            if (y > 0) {
+                visitNeighbor(currentState - width, nextCost, currentNode);
+                if (west) {
+                    visitNeighbor(currentState - width - 1, nextCost, currentNode);
+                }
+            }
+            if (west) {
+                visitNeighbor(currentState - 1, nextCost, currentNode);
+                if (y + 1 < height) {
+                    visitNeighbor(currentState + width - 1, nextCost, currentNode);
                 }
             }
         }
@@ -180,14 +194,47 @@ public final class RealTimeAdaptiveAStar {
         return bestNode;
     }
 
+    private void visitNeighbor(int neighborState, int nextCost, int currentNode) {
+        if (terrain[neighborState] == BLOCKED) {
+            return;
+        }
+        int packed = nodeByState[neighborState];
+        int neighborNode = (packed & ~NODE_MASK) == searchPrefix
+                ? (packed & NODE_MASK) - 1
+                : -1;
+        if (neighborNode < 0) {
+            neighborNode = nodeCount++;
+            state[neighborNode] = neighborState;
+            g[neighborNode] = nextCost;
+            int heuristic = heuristic(neighborState);
+            priority[neighborNode] = priorityKey(
+                    nextCost + heuristic, heuristic, neighborState);
+            parent[neighborNode] = currentNode;
+            status[neighborNode] = OPEN;
+            nodeByState[neighborState] = searchPrefix | (neighborNode + 1);
+            push(neighborNode);
+        } else if (status[neighborNode] == OPEN && nextCost < g[neighborNode]) {
+            g[neighborNode] = nextCost;
+            int heuristic = heuristicValue(priority[neighborNode]);
+            priority[neighborNode] = priorityKey(
+                    nextCost + heuristic, heuristic, neighborState);
+            parent[neighborNode] = currentNode;
+            siftUp(heapPosition[neighborNode]);
+        }
+    }
+
     private void updateHeuristics(int frontierNode) {
-        int bestF = f[frontierNode];
-        int generationPrefix = targetGeneration << HEURISTIC_BITS;
-        for (int i = 0; i < expandedCount; i++) {
+        int bestF = fValue(priority[frontierNode]);
+        for (int i = expandedCount; --i >= 0;) {
             int node = expanded[i];
             int learned = bestF - g[node];
-            if (learned > learnedHeuristic(state[node])) {
-                adaptiveHeuristic[state[node]] = generationPrefix | learned;
+            int searchState = state[node];
+            int packed = adaptiveHeuristic[searchState];
+            int previous = (packed & ~HEURISTIC_MASK) == targetPrefix
+                    ? packed & HEURISTIC_MASK
+                    : 0;
+            if (learned > previous) {
+                adaptiveHeuristic[searchState] = targetPrefix | learned;
             }
         }
     }
@@ -217,18 +264,21 @@ public final class RealTimeAdaptiveAStar {
 
     private boolean step(Direction direction) throws GameActionException {
         if (direction == null
-                || direction == Direction.CENTER
-                || !rc.isMovementReady()
-                || !rc.canMove(direction)) {
+                || direction == Direction.CENTER) {
             return false;
         }
         if (rc.getDirection() != direction) {
-            if (!rc.isTurningReady() || !rc.canTurn(direction)) {
+            // Check the post-turn move before spending the turn action. If the
+            // planned tile was an unseen wall, the caller can still choose a
+            // legal fallback direction this turn.
+            if (!rc.canMove(direction)
+                    || !rc.isTurningReady()
+                    || !rc.canTurn(direction)) {
                 return false;
             }
             rc.turn(direction);
         }
-        if (rc.isMovementReady() && rc.canMoveForward()) {
+        if (rc.canMoveForward()) {
             rc.moveForward();
             return true;
         }
@@ -241,6 +291,7 @@ public final class RealTimeAdaptiveAStar {
             Arrays.fill(nodeByState, 0);
             searchGeneration = 1;
         }
+        searchPrefix = searchGeneration << NODE_BITS;
         nodeCount = 0;
         heapSize = 0;
         expandedCount = 0;
@@ -250,33 +301,23 @@ public final class RealTimeAdaptiveAStar {
         int node = nodeCount++;
         state[node] = newState;
         g[node] = cost;
-        h[node] = heuristic(newState);
-        f[node] = cost + h[node];
+        int heuristic = heuristic(newState);
+        priority[node] = priorityKey(cost + heuristic, heuristic, newState);
         parent[node] = predecessor;
         status[node] = OPEN;
-        nodeByState[newState] = (searchGeneration << NODE_BITS) | (node + 1);
+        nodeByState[newState] = searchPrefix | (node + 1);
         return node;
-    }
-
-    private int findNode(int searchState) {
-        int packed = nodeByState[searchState];
-        return packed >>> NODE_BITS == searchGeneration
-                ? (packed & NODE_MASK) - 1
-                : -1;
     }
 
     private int heuristic(int searchState) {
         int x = searchState % width;
         int y = searchState / width;
         int base = Math.max(Math.abs(x - target.x), Math.abs(y - target.y));
-        return Math.max(base, learnedHeuristic(searchState));
-    }
-
-    private int learnedHeuristic(int searchState) {
         int packed = adaptiveHeuristic[searchState];
-        return packed >>> HEURISTIC_BITS == targetGeneration
+        int learned = (packed & ~HEURISTIC_MASK) == targetPrefix
                 ? packed & HEURISTIC_MASK
                 : 0;
+        return Math.max(base, learned);
     }
 
     private void push(int node) {
@@ -302,7 +343,7 @@ public final class RealTimeAdaptiveAStar {
         while (position > 0) {
             int parentPosition = (position - 1) >>> 1;
             int parentNode = heap[parentPosition];
-            if (!less(node, parentNode)) {
+            if (priority[node] >= priority[parentNode]) {
                 break;
             }
             heap[position] = parentNode;
@@ -321,8 +362,9 @@ public final class RealTimeAdaptiveAStar {
                 break;
             }
             int right = left + 1;
-            int child = right < heapSize && less(heap[right], heap[left]) ? right : left;
-            if (!less(heap[child], node)) {
+            int child = right < heapSize
+                    && priority[heap[right]] < priority[heap[left]] ? right : left;
+            if (priority[heap[child]] >= priority[node]) {
                 break;
             }
             heap[position] = heap[child];
@@ -333,22 +375,26 @@ public final class RealTimeAdaptiveAStar {
         heapPosition[node] = position;
     }
 
-    private boolean less(int left, int right) {
-        if (f[left] != f[right]) {
-            return f[left] < f[right];
-        }
-        return h[left] != h[right] ? h[left] < h[right] : state[left] < state[right];
+    private Direction directionFrom(int from, int to) {
+        int fromX = from % width;
+        int toX = to % width;
+        int fromY = from / width;
+        int toY = to / width;
+        return Direction.fromDelta(
+                toX > fromX ? 1 : toX < fromX ? -1 : 0,
+                toY > fromY ? 1 : toY < fromY ? -1 : 0);
     }
 
-    private Direction directionFrom(int from, int to) {
-        int dx = Integer.compare(to % width, from % width);
-        int dy = Integer.compare(to / width, from / width);
-        for (int i = 0; i < 8; i++) {
-            if (DX[i] == dx && DY[i] == dy) {
-                return DIRECTIONS[i];
-            }
-        }
-        return Direction.CENTER;
+    private static long priorityKey(int f, int h, int searchState) {
+        return ((long) f << 24) | ((long) h << 12) | searchState;
+    }
+
+    private static int fValue(long key) {
+        return (int) (key >>> 24);
+    }
+
+    private static int heuristicValue(long key) {
+        return (int) (key >>> 12) & HEURISTIC_MASK;
     }
 
     private int index(int x, int y) {
