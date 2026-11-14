@@ -1,0 +1,2 @@
+robot_id,assignment_round,start_x,start_y,target_x,target_y,status,finish_round,actual_rounds,actual_steps,optimal_steps,optimal_rounds,step_detour,round_overhead,path_efficiency,observed_turns,total_bytecodes,mean_bytecodes_per_turn,max_bytecodes_in_turn,bytecodes_per_step
+14027,2,9,6,9,2,reached,1481,1479,1479,87,87,1392,1392,0.058824,1480,21316851,14403.278,16341,14413.016

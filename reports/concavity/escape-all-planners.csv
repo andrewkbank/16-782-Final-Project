@@ -1,0 +1,9 @@
+map,family,bfs_steps,rtaa_status,rtaa_steps,rtaa_stretch,rtaa_escape_rounds,rtaa_revisits,lrta_status,lrta_steps,lrta_stretch,lrta_escape_rounds,lrta_revisits,bugnav_status,bugnav_steps,bugnav_stretch,bugnav_escape_rounds,bugnav_revisits,bug2_status,bug2_steps,bug2_stretch,bug2_escape_rounds,bug2_revisits
+Concave01_WideU40,WideU,56,reached,629,11.232143,590,403,reached,422,7.535714,390,219,reached,62,1.107143,30,0,reached,63,1.125,30,0
+Concave02_Bottle40,Bottle,56,reached,473,8.446429,441,300,reached,338,6.035714,306,180,reached,68,1.214286,33,0,reached,69,1.232143,33,0
+Concave03_CombBays40,CombBays,53,reached,253,4.773585,224,142,reached,142,2.679245,113,49,reached,56,1.056604,27,0,reached,115,2.169811,27,0
+Concave04_WideU56,WideU,92,match-ended,1998,,,1485,reached,1558,16.934783,1500,942,reached,102,1.108696,50,0,reached,103,1.119565,50,0
+Concave05_Bottle56,Bottle,92,match-ended,1998,,,1579,reached,1482,16.108696,1430,1024,reached,116,1.26087,57,0,reached,117,1.271739,57,0
+Concave06_CombBays56,CombBays,87,reached,1349,15.505747,1302,1004,reached,1479,17,690,905,reached,92,1.057471,45,0,reached,191,2.195402,45,0
+Concave07_Open40,Open,4,reached,4,1,,0,reached,4,1,,0,reached,4,1,,0,reached,4,1,,0
+Concave08_Open56,Open,4,reached,4,1,,0,reached,4,1,,0,reached,4,1,,0,reached,4,1,,0

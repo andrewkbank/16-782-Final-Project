@@ -1,0 +1,17 @@
+mode,planner,group,assignments,reachable,reached,completion,completed_steps,completed_bfs,completed_stretch,active_mean_bytecodes,peak_bytecodes,turns_at_limit,observed_turns,measured_planning_turns,mean_expansions,max_expansions
+escape,RTAA,concave,6,6,4,0.666667,2704,252,10.730159,14666.09827,16629,0,11994,,,
+escape,RTAA,open,2,2,2,1,8,8,1,6308,10478,0,3998,,,
+escape,LRTA,concave,6,6,6,1,5421,436,12.433486,14423.782937,16341,0,11994,,,
+escape,LRTA,open,2,2,2,1,8,8,1,5619.6,8292,0,3998,,,
+escape,BugNav,concave,6,6,6,1,496,436,1.137615,546.832669,5741,0,11994,,,
+escape,BugNav,open,2,2,2,1,8,8,1,184.6,234,0,3998,,,
+escape,Bug2,concave,6,6,6,1,658,436,1.509174,396.246988,503,0,11994,,,
+escape,Bug2,open,2,2,2,1,8,8,1,121.6,143,0,3998,,,
+exploration,RTAA,concave,120,109,70,0.642202,3412,2102,1.623216,14324.199629,16705,0,23988,,,
+exploration,RTAA,open,40,40,40,1,982,977,1.005118,12603.066536,16956,0,7996,,,
+exploration,LRTA,concave,120,109,83,0.761468,3818,2529,1.509688,14005.917426,16550,0,23988,11179,9.750157,13
+exploration,LRTA,open,40,40,40,1,982,977,1.005118,12588.361057,16550,0,7996,982,7.033605,12
+exploration,BugNav,concave,120,109,99,0.908257,6299,3630,1.735262,669.385029,7841,0,23988,,,
+exploration,BugNav,open,40,40,40,1,977,977,1,214.179941,664,0,7996,,,
+exploration,Bug2,concave,120,109,92,0.844037,6703,3205,2.09142,370.55023,565,0,23988,,,
+exploration,Bug2,open,40,40,40,1,981,977,1.004094,152.67189,461,0,7996,,,

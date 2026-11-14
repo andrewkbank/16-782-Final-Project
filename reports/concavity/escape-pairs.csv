@@ -1,0 +1,9 @@
+map,family,bfs_steps,rtaa_status,lrta_status,rtaa_steps,lrta_steps,lrta_step_change_percent,rtaa_stretch,lrta_stretch,rtaa_escape_rounds,lrta_escape_rounds,rtaa_revisits,lrta_revisits
+Concave01_WideU40,WideU,56,reached,reached,629,422,-32.90938,11.232143,7.535714,590,390,403,219
+Concave02_Bottle40,Bottle,56,reached,reached,473,338,-28.541226,8.446429,6.035714,441,306,300,180
+Concave03_CombBays40,CombBays,53,reached,reached,253,142,-43.873518,4.773585,2.679245,224,113,142,49
+Concave04_WideU56,WideU,92,match-ended,reached,1998,1558,,,16.934783,,1500,1485,942
+Concave05_Bottle56,Bottle,92,match-ended,reached,1998,1482,,,16.108696,,1430,1579,1024
+Concave06_CombBays56,CombBays,87,reached,reached,1349,1479,9.636768,15.505747,17,1302,690,1004,905
+Concave07_Open40,Open,4,reached,reached,4,4,0,1,1,,,0,0
+Concave08_Open56,Open,4,reached,reached,4,4,0,1,1,,,0,0

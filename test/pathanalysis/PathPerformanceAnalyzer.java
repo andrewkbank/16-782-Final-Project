@@ -107,7 +107,7 @@ public final class PathPerformanceAnalyzer {
                         turn.turningCooldown(),
                         turn.actionCooldown(),
                         turn.bytecodesUsed(),
-                        announcedTarget);
+                        announcedTarget, readExpansions(turn));
                 observations.computeIfAbsent(turn.robotId(), unused -> new ArrayList<>())
                         .add(observation);
             }
@@ -134,6 +134,19 @@ public final class PathPerformanceAnalyzer {
             }
         }
         return null;
+    }
+
+    private static int readExpansions(Turn turn) {
+        for (int i = 0; i < turn.actionsLength(); i++) {
+            if (turn.actionsType(i) == Action.IndicatorStringAction) {
+                IndicatorStringAction action = (IndicatorStringAction) turn.actions(
+                        new IndicatorStringAction(), i);
+                if (action.value().startsWith("LRTA_EXPANDED:")) {
+                    return Integer.parseInt(action.value().substring(14));
+                }
+            }
+        }
+        return -1; // absent, not zero expansions
     }
 
     private static List<Segment> buildSegments(
@@ -252,7 +265,7 @@ public final class PathPerformanceAnalyzer {
             Map<Integer, List<Observation>> byRobot) throws IOException {
         try (BufferedWriter writer = Files.newBufferedWriter(output)) {
             writer.write("robot_id,round,x,y,direction,move_cooldown,turning_cooldown,"
-                    + "action_cooldown,bytecodes_used,target_x,target_y,segment_id\n");
+                    + "action_cooldown,bytecodes_used,target_x,target_y,segment_id,expanded_states\n");
             List<Integer> robotIds = new ArrayList<>(byRobot.keySet());
             robotIds.sort(Integer::compareTo);
             for (int robotId : robotIds) {
@@ -264,7 +277,7 @@ public final class PathPerformanceAnalyzer {
                         segmentId++;
                     }
                     writer.write(String.format(Locale.ROOT,
-                            "%d,%d,%d,%d,%d,%d,%d,%d,%d,%s,%s,%d%n",
+                            "%d,%d,%d,%d,%d,%d,%d,%d,%d,%s,%s,%d,%s%n",
                             robotId,
                             observation.round(),
                             observation.location().x,
@@ -276,7 +289,7 @@ public final class PathPerformanceAnalyzer {
                             observation.bytecodesUsed(),
                             target == null ? "" : Integer.toString(target.x),
                             target == null ? "" : Integer.toString(target.y),
-                            segmentId));
+                            segmentId, observation.expansions() < 0 ? "" : Integer.toString(observation.expansions())));
                 }
             }
         }
@@ -356,7 +369,7 @@ public final class PathPerformanceAnalyzer {
             int turningCooldown,
             int actionCooldown,
             int bytecodesUsed,
-            MapLocation announcedTarget) {}
+            MapLocation announcedTarget, int expansions) {}
 
     private static final class Segment {
         private final int robotId;

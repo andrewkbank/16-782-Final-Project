@@ -1,0 +1,10 @@
+[
+  {"map":"Concave01_WideU40","family":"WideU","size":40,"start_x":10,"start_y":6,"target_x":10,"target_y":2,"escape_y":28,"trap_free_cells":255,"bfs_steps":56,"walls":122},
+  {"map":"Concave02_Bottle40","family":"Bottle","size":40,"start_x":10,"start_y":6,"target_x":10,"target_y":2,"escape_y":28,"trap_free_cells":183,"bfs_steps":56,"walls":138},
+  {"map":"Concave03_CombBays40","family":"CombBays","size":40,"start_x":7,"start_y":6,"target_x":7,"target_y":2,"escape_y":28,"trap_free_cells":111,"bfs_steps":53,"walls":170},
+  {"map":"Concave04_WideU56","family":"WideU","size":56,"start_x":14,"start_y":6,"target_x":14,"target_y":2,"escape_y":44,"trap_free_cells":751,"bfs_steps":92,"walls":202},
+  {"map":"Concave05_Bottle56","family":"Bottle","size":56,"start_x":14,"start_y":6,"target_x":14,"target_y":2,"escape_y":44,"trap_free_cells":479,"bfs_steps":92,"walls":234},
+  {"map":"Concave06_CombBays56","family":"CombBays","size":56,"start_x":9,"start_y":6,"target_x":9,"target_y":2,"escape_y":44,"trap_free_cells":351,"bfs_steps":87,"walls":282},
+  {"map":"Concave07_Open40","family":"Open","size":40,"start_x":10,"start_y":6,"target_x":10,"target_y":2,"escape_y":null,"trap_free_cells":0,"bfs_steps":4,"walls":0},
+  {"map":"Concave08_Open56","family":"Open","size":56,"start_x":14,"start_y":6,"target_x":14,"target_y":2,"escape_y":null,"trap_free_cells":0,"bfs_steps":4,"walls":0}
+]

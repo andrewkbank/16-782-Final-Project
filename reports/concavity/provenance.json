@@ -1,0 +1,30 @@
+{
+  "analyzed_at": "2026-11-14T17:05:56.420Z",
+  "input": "analysis/concavity",
+  "rounds": 2000,
+  "seed": 6147,
+  "sha256": {
+    "src/rtaa/RealTimeAdaptiveAStar.java": "ce1fb6923d2b4fc9c416d330fe5fbaa39d15a3532f96d874b832241405826043",
+    "src/lrta/LearningRealTimeAStar.java": "d22821fc5a82edea867010d6bd17c3b8f2d21fd0cbff7067110c433000f69a11",
+    "src/pathplanner/BugNav.java": "790d65bdf9cf666b237e2318b71f6bb06848b40f805b48df1970e088b0e35eaa",
+    "src/classicbug2/ClassicBug2.java": "f32787358ce04c8dfd139b4e35dfccf0c990261e0a49b6d39cd7bcacab663330",
+    "src/concavebugnavbench/RobotPlayer.java": "b9f01d2d441cbd5e38b3d373a3b60f40fdd7edd38de2d8ba6adab697aa4c3e12",
+    "src/concavebug2bench/RobotPlayer.java": "6b9d994d2abda5782f1c76072ab7b0b108eb10017d3e05ce5c61f302de3fd4a2",
+    "src/bugnavbench/RobotPlayer.java": "9c19bd05685f457bd8606c72cec3e5bfcfbe4c155689d5b573ffe8bbd3dcc64c",
+    "src/bug2bench/RobotPlayer.java": "9799c87f35fe1ea8efd039c4b3e23d98cabf0c00cc0fff1eb1bed59c75b43950",
+    "src/concavertaabench/RobotPlayer.java": "ff60745b0eb2841e1df581eb46b916db3552bd9ac41979b8775fd1c9a142e134",
+    "src/concavelrtabench/RobotPlayer.java": "abb6fb28ce309b7f89a2fedf65682cdb81e5dbbb918fbe82d454c70bd6e4d80f",
+    "src/rtaabench/RobotPlayer.java": "e11d6a5f959b0c83b6122b7af9a338871eb3ebced86f461e56451963cc65a0a8",
+    "src/lrtabench/RobotPlayer.java": "0e33251a25c684338c55234d0a43620bea2d37da03b3b927208a349338a5c1dd",
+    "test/maptools/GenerateConcaveMapSuite.java": "8dcdd9dbb8769ab7635fbb87146e29de5c5785726e0fff65071976a633743dad",
+    "test/pathanalysis/PathPerformanceAnalyzer.java": "c119730fe80cb33b5e09b8ede792ed0eb00447777397a8163ec31a372c3b9dac",
+    "maps/Concave01_WideU40.map26": "d593bd373588b788cfe3d64f15db62e51d6f54e46b9a97de6a5cd3641f4c47e6",
+    "maps/Concave02_Bottle40.map26": "e722cc514e31fbc2394bf95b94b68b75c8af7faca134c2b1a749f8e327433670",
+    "maps/Concave03_CombBays40.map26": "4bba647f2c385bc8be889a793e59b2fcf9b226d3ea4ab9672e54f4f91b7703c6",
+    "maps/Concave04_WideU56.map26": "7f77c1bc59475ed0ae7fafd3913f8e32d51e54bd8524f1b6523a5575421fdf34",
+    "maps/Concave05_Bottle56.map26": "f46db271d9460ea9f886ddb70694011c36f5f3ffda639663e13078670f52ae95",
+    "maps/Concave06_CombBays56.map26": "7c49fc0d488484d87817c0453b69048d48472a7f039ecbb7dd9bb990ba29ce51",
+    "maps/Concave07_Open40.map26": "5c1e5ee9c8dcc3f0f40c2e6caf3f580a8e876d0ac28aa4eae9cae783844aaf5c",
+    "maps/Concave08_Open56.map26": "1cc14b48856a010ff22bb402f2081ca94e3c393a32531a6bdf870e494069c3ce"
+  }
+}

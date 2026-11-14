@@ -452,6 +452,26 @@ task generatePathfindingMapSuite(type: JavaExec) {
   args = [new File(projectDir, 'maps').absolutePath]
 }
 
+task generateConcaveMapSuite(type: JavaExec) {
+  description 'Generates six large concave traps and two open controls without wall repairs.'
+  group 'battlecode'
+  dependsOn testClasses
+  mainClass = 'maptools.GenerateConcaveMapSuite'
+  classpath = sourceSets.test.runtimeClasspath
+  args = [new File(projectDir, 'maps').absolutePath,
+          new File(projectDir, 'reports/concavity').absolutePath]
+}
+
+task generateTrafficMapSuite(type: JavaExec) {
+  description 'Generates controlled corridor congestion maps and route metadata.'
+  group 'battlecode'
+  dependsOn testClasses
+  mainClass = 'maptools.GenerateTrafficMapSuite'
+  classpath = sourceSets.test.runtimeClasspath
+  args = [new File(projectDir, 'maps').absolutePath,
+          new File(projectDir, 'reports/traffic').absolutePath]
+}
+
 def analysisMapName = project.findProperty('analysisMap') ?:
     project.property('maps').toString().split(',')[0]
 def analysisReplayFile = project.findProperty('analysisReplay') ?:
