@@ -8,8 +8,12 @@ public final class RobotPlayer {
     private RobotPlayer() {}
 
     public static void run(RobotController rc) {
+        run(rc, RealTimeAdaptiveAStar.Mode.STANDARD);
+    }
+
+    public static void run(RobotController rc, RealTimeAdaptiveAStar.Mode mode) {
         boolean king = rc.getType() == UnitType.RAT_KING;
-        RealTimeAdaptiveAStar navigator = king ? null : new RealTimeAdaptiveAStar(rc);
+        RealTimeAdaptiveAStar navigator = king ? null : new RealTimeAdaptiveAStar(rc, mode);
         MapLocation target = king ? null : new MapLocation(rc.getLocation().x, 2);
         boolean spawned = false;
         boolean announced = false;

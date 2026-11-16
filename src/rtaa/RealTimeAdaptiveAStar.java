@@ -21,6 +21,7 @@ public final class RealTimeAdaptiveAStar {
     /** Tuned below the 17,500-bytecode baby-rat limit on the project maps. */
     public static final int MAX_EXPANSIONS = 14;
     private static final int BYTECODE_RESERVE = 4_000;
+    private static final int EXPERIMENT_BYTECODE_RESERVE = 6_000;
     private static final int MAX_SEARCH_NODES = 1 + MAX_EXPANSIONS * 8;
     private static final int HEURISTIC_BITS = 12;
     private static final int HEURISTIC_MASK = (1 << HEURISTIC_BITS) - 1;
@@ -48,7 +49,15 @@ public final class RealTimeAdaptiveAStar {
     private static final int[] DX = {0, 1, 1, 1, 0, -1, -1, -1};
     private static final int[] DY = {1, 1, 0, -1, -1, -1, 0, 1};
 
+    public enum Mode {
+        STANDARD,
+        MATCHED_RESERVE,
+        MOVE_TO_BORDER
+    }
+
     private final RobotController rc;
+    private final boolean moveToBorder;
+    private final int bytecodeReserve;
     private final int width;
     private final int height;
     private final byte[] terrain;
@@ -80,7 +89,13 @@ public final class RealTimeAdaptiveAStar {
     private int expandedCount;
 
     public RealTimeAdaptiveAStar(RobotController rc) {
+        this(rc, Mode.STANDARD);
+    }
+
+    public RealTimeAdaptiveAStar(RobotController rc, Mode mode) {
         this.rc = rc;
+        moveToBorder = mode == Mode.MOVE_TO_BORDER;
+        bytecodeReserve = mode == Mode.STANDARD ? BYTECODE_RESERVE : EXPERIMENT_BYTECODE_RESERVE;
         width = rc.getMapWidth();
         height = rc.getMapHeight();
         int tileCount = width * height;
@@ -114,13 +129,15 @@ public final class RealTimeAdaptiveAStar {
         }
 
         int start = index(rc.getLocation().x, rc.getLocation().y);
-        int frontierNode = limitedLookahead(start);
-        if (frontierNode < 0) {
+        int bestFNode = limitedLookahead(start);
+        if (bestFNode < 0) {
             return;
         }
-        updateHeuristics(frontierNode);
+        int movementNode = moveToBorder ? chooseMovementNode(bestFNode) : bestFNode;
+        // The heuristic update still uses the minimum-f frontier node.
+        updateHeuristics(bestFNode);
 
-        int firstNode = frontierNode;
+        int firstNode = movementNode;
         while (parent[firstNode] != 0 && parent[firstNode] != firstNode) {
             firstNode = parent[firstNode];
         }
@@ -146,9 +163,10 @@ public final class RealTimeAdaptiveAStar {
         push(startNode);
 
         int bestNode = -1;
+        int reserve = bytecodeReserve;
         while (heapSize > 0
                 && expandedCount < MAX_EXPANSIONS
-                && Clock.getBytecodesLeft() > BYTECODE_RESERVE) {
+                && Clock.getBytecodesLeft() > reserve) {
             int currentNode = pop();
             int currentState = state[currentNode];
             if (currentState == targetIndex) {
@@ -221,6 +239,34 @@ public final class RealTimeAdaptiveAStar {
             parent[neighborNode] = currentNode;
             siftUp(heapPosition[neighborNode]);
         }
+    }
+
+    private int chooseMovementNode(int bestFNode) {
+        if (state[bestFNode] == targetIndex) {
+            return bestFNode;
+        }
+        int bestIncrease = heuristicIncrease(bestFNode);
+        if (bestIncrease == 0) {
+            return bestFNode;
+        }
+
+        // The heap root minimizes f. Scan OPEN for less heuristic growth.
+        int bestNode = bestFNode;
+        for (int i = 1; i < heapSize; i++) {
+            int node = heap[i];
+            int increase = heuristicIncrease(node);
+            if (increase < bestIncrease
+                    || (increase == bestIncrease && priority[node] < priority[bestNode])) {
+                bestNode = node;
+                bestIncrease = increase;
+            }
+        }
+        return bestNode;
+    }
+
+    private int heuristicIncrease(int node) {
+        int cell = state[node];
+        return heuristicValue(priority[node]) - initialHeuristic(cell);
     }
 
     private void updateHeuristics(int frontierNode) {
@@ -310,14 +356,17 @@ public final class RealTimeAdaptiveAStar {
     }
 
     private int heuristic(int searchState) {
-        int x = searchState % width;
-        int y = searchState / width;
-        int base = Math.max(Math.abs(x - target.x), Math.abs(y - target.y));
+        int base = initialHeuristic(searchState);
         int packed = adaptiveHeuristic[searchState];
         int learned = (packed & ~HEURISTIC_MASK) == targetPrefix
                 ? packed & HEURISTIC_MASK
                 : 0;
         return Math.max(base, learned);
+    }
+
+    private int initialHeuristic(int cell) {
+        return Math.max(Math.abs(cell % width - target.x),
+                Math.abs(cell / width - target.y));
     }
 
     private void push(int node) {
